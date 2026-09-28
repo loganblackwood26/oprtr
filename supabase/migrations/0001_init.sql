@@ -323,10 +323,23 @@ end $$;
 alter table chat_messages enable row level security;
 
 create policy companies_member on companies for all
-  using (id in (select my_company_ids()));
+  using (id in (select my_company_ids()))
+  with check (id in (select my_company_ids()));
+-- any signed-in user may create a company (they become its owner right after)
+create policy companies_insert on companies for insert to authenticated
+  with check (true);
 
 create policy memberships_self on memberships for select
   using (company_id in (select my_company_ids()));
+-- a user may add themselves as owner of a company that has no members yet
+create policy memberships_bootstrap on memberships for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and not exists (select 1 from memberships m where m.company_id = memberships.company_id)
+  );
+-- owners manage other members
+create policy memberships_owner on memberships for all
+  using (my_role(company_id) = 'owner') with check (my_role(company_id) = 'owner');
 
 -- generic member policies for tenant tables
 do $$
@@ -365,3 +378,9 @@ language sql stable as $$
   order by embedding <=> query
   limit k
 $$;
+
+-- hardening
+revoke execute on function public.my_company_ids() from anon;
+revoke execute on function public.my_role(uuid) from anon;
+alter function public.match_memory(uuid, vector, int) set search_path = public;
+revoke execute on function public.match_memory(uuid, vector, int) from anon;
