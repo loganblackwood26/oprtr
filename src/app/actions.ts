@@ -36,12 +36,16 @@ export async function customerDecideEstimate(token: string, decision: "approve" 
 export async function createCompany(form: { name: string; trade: string; displayName: string; timezone: string }) {
   const ctx = await currentContext();
   if (!ctx) throw new Error("Sign in first");
-  const { data: company, error } = await ctx.supabase.from("companies").insert({ name: form.name, trade: form.trade || null, timezone: form.timezone }).select("id").single();
+  // One atomic DB call: creates the company and makes the caller its owner (see create_company in migrations).
+  const { data: companyId, error } = await ctx.supabase.rpc("create_company", {
+    p_name: form.name,
+    p_trade: form.trade,
+    p_timezone: form.timezone,
+    p_display_name: form.displayName,
+  });
   if (error) throw error;
-  const { error: mErr } = await ctx.supabase.from("memberships").insert({ company_id: company.id, user_id: ctx.user.id, role: "owner", display_name: form.displayName });
-  if (mErr) throw mErr;
-  await seedRoutines(ctx.supabase, company.id);
-  return company.id;
+  await seedRoutines(ctx.supabase, companyId as string);
+  return companyId as string;
 }
 
 export async function completeOnboarding() {
