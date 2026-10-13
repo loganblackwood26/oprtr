@@ -11,7 +11,7 @@ One AI office manager for trade businesses. The owner talks to one assistant; un
 | Approval policy | `src/lib/domain/approvals` | Default: always ask. Per-action / per-routine "always allow" and dollar thresholds. |
 | AI | `src/lib/ai` | `orchestrator.ts` (one loop, Claude tool use, prompt caching), `skills.ts` (specialist prompts), `tools.ts` (everything the AI can do), `actions.ts` (approval front door), `execute.ts` (what runs when approved), `scheduler.ts` + `runner.ts` (routines). |
 | Memory | `src/lib/ai/memory.ts` + `memory_facts`, `memory_chunks`, `sops`, `price_book_items` | Exact facts in tables; freeform in pgvector via Voyage embeddings. |
-| Integrations | `src/lib/integrations` | QuickBooks (OAuth, read always, writes gated), Quo SMS (API key), Google Gmail + Calendar (OAuth). Credentials AES-GCM encrypted at rest. |
+| Integrations | `src/lib/integrations` | QuickBooks, Gmail, and Google Calendar via Composio (hosted OAuth, per-company connections, no Intuit/Google app review needed). Quo SMS via API key, AES-GCM encrypted at rest. QuickBooks writes gated behind a toggle + approvals. |
 | App | `src/app` | Home (dashboard + chat), Chat, Pipeline board, Approvals inbox, Job detail with estimate review, Customers, Settings, Onboarding interview, public estimate page `/e/[token]`. |
 | DB | `supabase/migrations/0001_init.sql` | Multi-tenant with RLS; crew can't see money. |
 
@@ -21,10 +21,9 @@ One AI office manager for trade businesses. The owner talks to one assistant; un
 2. **Anthropic**: API key → `ANTHROPIC_API_KEY`.
 3. **Voyage** (embeddings for memory search): key → `VOYAGE_API_KEY`. Optional — memory still saves without it, search falls back to keyword.
 4. **Secrets**: `openssl rand -hex 32` → `CREDENTIALS_ENCRYPTION_KEY`; any long string → `CRON_SECRET`.
-5. **QuickBooks**: in the Intuit developer app, add redirect URI `https://<your-domain>/api/oauth/quickbooks`. Client ID/secret → env.
-6. **Google**: Cloud Console → OAuth client (web) → redirect URI `https://<your-domain>/api/oauth/google`; enable Gmail API + Calendar API. Client ID/secret → env.
-7. **Quo**: API key from Quo settings; paste it in the app under Settings → Connections along with the sending number. Point Quo's "message received" webhook at `/api/webhooks/quo` (optional header `x-webhook-secret` = `QUO_WEBHOOK_SECRET`).
-8. **Vercel**: import the repo, add all env vars, deploy. `vercel.json` schedules the routine runner every 10 minutes; set `CRON_SECRET` in Vercel too.
+5. **Composio**: platform.composio.dev → Settings → API Keys → `COMPOSIO_API_KEY`. Owners connect QuickBooks / Gmail / Calendar from Settings → Connections in the app.
+6. **Quo**: API key from Quo settings; paste it in the app under Settings → Connections along with the sending number. Point Quo's "message received" webhook at `/api/webhooks/quo` (optional header `x-webhook-secret` = `QUO_WEBHOOK_SECRET`).
+7. **Vercel**: import the repo, add all env vars, deploy. `vercel.json` schedules the routine runner every 10 minutes; set `CRON_SECRET` in Vercel too.
 
 Local: `cp .env.example .env.local`, fill it in, `npm i --legacy-peer-deps`, `npm run dev`.
 

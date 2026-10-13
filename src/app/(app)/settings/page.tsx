@@ -4,19 +4,22 @@ import { formatCents } from "@/lib/domain/pricing/engine";
 import { loadPolicy } from "@/lib/ai/actions";
 import { DEFAULT_ROUTINES } from "@/lib/domain/lifecycle/routines";
 import { ResetRuleButton, RoutineToggle, SettingsForm } from "./controls";
+import { connectionStatus } from "@/lib/integrations/composio";
 
 export default async function SettingsPage() {
   const ctx = (await currentContext())!;
   const companyId = ctx.membership!.company_id as string;
   const db = ctx.supabase;
-  const [{ data: company }, { data: items }, { data: integrations }, { data: routines }, policy] = await Promise.all([
+  const [{ data: company }, { data: items }, { data: integrations }, { data: routines }, policy, status] = await Promise.all([
     db.from("companies").select("*").eq("id", companyId).single(),
     db.from("price_book_items").select("id,name,category,model,minimum_cents,taxable").eq("company_id", companyId).eq("active", true).order("category").order("name"),
     db.from("integrations").select("provider,external_id,writes_enabled,connected_at").eq("company_id", companyId),
     db.from("routines").select("routine_key,enabled").eq("company_id", companyId),
     loadPolicy(db, companyId),
+    connectionStatus(companyId).catch(() => [] as Awaited<ReturnType<typeof connectionStatus>>),
   ]);
   const connected = new Map((integrations ?? []).map((i) => [i.provider, i]));
+  const is = (t: "quickbooks" | "gmail" | "googlecalendar") => status.find((s) => s.toolkit === t)?.connected ?? false;
   const enabled = new Map((routines ?? []).map((r) => [r.routine_key, r.enabled]));
   const allowRules = policy.rules.filter((r) => r.mode !== "always_ask");
 
@@ -28,10 +31,14 @@ export default async function SettingsPage() {
       </div>
 
       <section>
-        <h2 className="font-semibold mb-3">Connections</h2>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="font-semibold">Connections</h2>
+          <Link href="/settings/integrations" className="text-sm text-accent">Manage</Link>
+        </div>
         <div className="card divide-y divide-border">
-          <Conn name="QuickBooks Online" sub={connected.get("quickbooks") ? `Connected · ${connected.get("quickbooks")!.writes_enabled ? "reads + writes" : "read-only"}` : "Customers, items, estimates"} href="/api/oauth/quickbooks" connected={!!connected.get("quickbooks")} extra={connected.get("quickbooks") ? <Link href="/settings/integrations" className="text-sm text-accent">Manage</Link> : null} />
-          <Conn name="Google (Gmail + Calendar)" sub={connected.get("google") ? `Connected · ${connected.get("google")!.external_id}` : "Send email as you, book visits"} href="/api/oauth/google" connected={!!connected.get("google")} />
+          <Conn name="QuickBooks Online" sub={is("quickbooks") ? `Connected · ${connected.get("quickbooks")?.writes_enabled ? "reads + writes" : "read-only"}` : "Customers, items, estimates"} href="/api/connect/quickbooks" connected={is("quickbooks")} />
+          <Conn name="Gmail" sub={is("gmail") ? "Connected" : "Send email as you"} href="/api/connect/gmail" connected={is("gmail")} />
+          <Conn name="Google Calendar" sub={is("googlecalendar") ? "Connected" : "Book visits and job starts"} href="/api/connect/googlecalendar" connected={is("googlecalendar")} />
           <Conn name="Quo (texting)" sub={connected.get("quo") ? `Connected · ${connected.get("quo")!.external_id}` : "Text customers from your business number"} href="/settings/integrations" connected={!!connected.get("quo")} />
         </div>
       </section>
@@ -95,7 +102,7 @@ function Conn({ name, sub, href, connected, extra }: { name: string; sub: string
   return (
     <div className="px-4 py-3 flex items-center justify-between gap-3">
       <div><div className="font-medium">{name}</div><div className="text-sm text-ink-2">{sub}</div></div>
-      {connected ? (extra ?? <span className="pill bg-ok-soft text-ok">Connected</span>) : <Link href={href} className="btn-outline h-9">Connect</Link>}
+      {connected ? (extra ?? <span className="pill bg-ok-soft text-ok">Connected</span>) : <a href={href} className="btn-outline h-9">Connect</a>}
     </div>
   );
 }

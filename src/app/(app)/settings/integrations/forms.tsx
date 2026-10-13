@@ -17,7 +17,7 @@ export function QuoForm() {
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
-        const res = await fetch("/api/oauth/quo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey, fromNumber: from }) });
+        const res = await fetch("/api/connect/quo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey, fromNumber: from }) });
         setBusy(false);
         setMsg(res.ok ? "Saved." : (await res.json()).error);
         if (res.ok) {
@@ -40,6 +40,26 @@ export function QboWritesToggle({ enabled }: { enabled: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={on} disabled={pending} onClick={() => { const n = !on; setOn(n); start(() => setQuickBooksWrites(n)); }} className={clsx("relative h-7 w-12 rounded-full transition-colors shrink-0", on ? "bg-accent" : "bg-border")}>
       <span className={clsx("absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform", on ? "translate-x-5" : "translate-x-0.5")} />
+    </button>
+  );
+}
+
+export function DisconnectButton({ toolkit }: { toolkit: string }) {
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  return (
+    <button
+      className="btn-ghost h-8 text-sm"
+      disabled={busy}
+      onClick={async () => {
+        if (!confirm("Disconnect? The assistant will lose access until you reconnect.")) return;
+        setBusy(true);
+        await fetch(`/api/connect/${toolkit}`, { method: "DELETE" });
+        setBusy(false);
+        router.refresh();
+      }}
+    >
+      Disconnect
     </button>
   );
 }
